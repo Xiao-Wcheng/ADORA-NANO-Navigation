@@ -1,0 +1,18 @@
+{
+  "closure_distance_m": 0.08561270283366626,
+  "closure_heading_deg": -0.32218691815954226,
+  "config_hash": "reference-v1",
+  "constraints": 250,
+  "final_cost": 0.0,
+  "height": 51,
+  "initial_cost": 0.0,
+  "loop_closures": 0,
+  "near_chain_constraints": 0,
+  "resolution": 0.05,
+  "scans": 198,
+  "sequential_constraints": 250,
+  "solver_iterations": 0,
+  "solver_status": "not_run",
+  "source_tag": "slam_toolbox-2.6.9",
+  "width": 74
+}

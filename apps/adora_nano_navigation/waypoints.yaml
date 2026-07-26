@@ -1,0 +1,13 @@
+# Named navigation goals measured in the saved map frame.
+waypoints:
+  position1:
+    name: "位置1"
+    x: 2.642
+    y: -1.930
+    yaw: 0.035
+
+  position2:
+    name: "位置2"
+    x: 1.103
+    y: -1.233
+    yaw: 3.095

@@ -1,0 +1,8 @@
+**/build/
+**/target/
+**/out/
+**/__pycache__/
+*.pyc
+generated_*.yml
+*.dora-session.yaml
+*.log

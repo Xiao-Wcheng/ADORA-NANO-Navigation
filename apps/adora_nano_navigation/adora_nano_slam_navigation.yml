@@ -1,0 +1,273 @@
+nodes:
+- id: ms200
+  path: ../../driver/ms200_dora_node/build/ms200_dora_node
+  inputs:
+    tick:
+      source: dora/timer/millis/100
+  outputs:
+  - LaserScan
+  env:
+    SERIAL_PORT: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5AA6084348-if00
+    SERIAL_BAUD: '230400'
+    FRAME_ID: lidar
+    OUTPUT_ID: LaserScan
+    ANGLE_MIN_DEG: '0.0'
+    ANGLE_MAX_DEG: '360.0'
+    RANGE_MIN: '0.10'
+    RANGE_MAX: '12.0'
+    CLOCKWISE: 'false'
+    MOTOR_SPEED_HZ: '10'
+    TARGET_POINT_COUNT: '450'
+    CONNECT_RETRY_MS: '1000'
+    GRAB_TIMEOUT_MS: '500'
+- id: chassis
+  path: ../../chassis/feetech_kiwi_chassis_dora_node/sdk_node/target/release/feetech-kiwi-chassis-sdk-node
+  inputs:
+    tick:
+      source: dora/timer/millis/50
+    CmdVelTwist:
+      source: nav_supervisor/SafeCmdVelTwist
+  outputs:
+  - Odometry
+  env:
+    SERIAL_PORT: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5AE6086267-if00
+    SERIAL_BAUD: '1000000'
+    WHEEL_IDS: 13,14,15
+    WHEEL_ANGLES_DEG: 60,180,300
+    LINEAR_TICKS_PER_MPS: '13350'
+    ANGULAR_TICKS_PER_RADPS: '1545'
+    SPEED_LIMIT: '1500'
+    ODOM_SOURCE: feedback
+    CMD_VEL_TIMEOUT_SEC: '0.35'
+- id: karto_slam
+  path: ../../localization/karto_slam_dora_node/build/karto_slam_dora_node
+  inputs:
+    LaserScan:
+      source: ms200/LaserScan
+    Odometry:
+      source: chassis/Odometry
+  outputs:
+  - CorrectedPose
+  - SlamStatus
+  - SafetyStop
+  env:
+    SLAM_MODE: continue_mapping
+    MAP_PREFIX: ../../mapping/maps/ms200_keyboard_map
+    MINIMUM_TRAVEL_DISTANCE: '0.05'
+    MINIMUM_TRAVEL_HEADING: '0.05'
+    SCAN_BUFFER_SIZE: '10'
+    SCAN_BUFFER_MAXIMUM_SCAN_DISTANCE: '10.0'
+    CORRELATION_SEARCH_SPACE_DIMENSION: '0.5'
+    CORRELATION_SEARCH_SPACE_RESOLUTION: '0.01'
+    LOOP_SEARCH_MAXIMUM_DISTANCE: '3.0'
+    MAX_LASER_RANGE: '8.0'
+    MAX_SYNC_WAIT: '0.20'
+    ODOM_BUFFER_DURATION: '3.0'
+    MAP_RESOLUTION: '0.05'
+    MAP_CROP_MARGIN: '0.50'
+    LIDAR_X: '0.09'
+    LIDAR_Y: '0.06'
+    LIDAR_YAW: '0.0'
+- id: pose_goal
+  path: ../../planning/pose_goal_dora_node/build/pose_goal_dora_node
+  inputs:
+    CorrectedPose:
+      source: karto_slam/CorrectedPose
+    ReplanRequest:
+      source: nav_supervisor/ReplanRequest
+  outputs:
+  - start_point
+  - goal_point
+  - goal_pose
+  env:
+    RESOLUTION: '0.05'
+    MAP_WIDTH: '400'
+    MAP_HEIGHT: '400'
+    ORIGIN_X: '-10.0'
+    ORIGIN_Y: '-10.0'
+    GOAL_DISTANCE: '0.50'
+    GOAL_LATERAL: '-0.30'
+    SEND_ONCE: 'false'
+    LATCH_GOAL: 'true'
+    MIN_SEND_INTERVAL_MS: '1000'
+- id: path_planning_node
+  path: ../../planning/adora_nano_global_planner_node/build/adora_nano_global_planner_node
+  inputs:
+    start_point:
+      source: pose_goal/start_point
+    goal_point:
+      source: pose_goal/goal_point
+    LaserScan:
+      source: ms200/LaserScan
+    CorrectedPose:
+      source: karto_slam/CorrectedPose
+  outputs:
+  - path
+  env:
+    MAP_YAML_PATH: ../../mapping/maps/ms200_keyboard_map.yaml
+    ALGORITHM: astar
+    RELOAD_MAP_ON_PLAN: 'true'
+    INFLATION_RADIUS_CELLS: '3'
+    MAX_NEAREST_FREE_RADIUS_CELLS: '8'
+    ENABLE_PATH_SMOOTHING: 'true'
+    DYNAMIC_OBSTACLE_INFLATION_M: '0.18'
+    DYNAMIC_OBSTACLE_MAX_RANGE: '4.0'
+    DYNAMIC_OBSTACLE_TIMEOUT_MS: '700'
+    DYNAMIC_SCAN_STRIDE: '2'
+    FOOTPRINT_HALF_LENGTH: '0.17'
+    FOOTPRINT_HALF_WIDTH: '0.17'
+    SELF_FILTER_PADDING: '0.01'
+    LIDAR_X: '0.09'
+    LIDAR_Y: '0.06'
+    LIDAR_YAW: '0.0'
+- id: local_planner
+  path: ../../planning/rpp_local_controller_dora_node/build/rpp_local_controller_dora_node
+  inputs:
+    path:
+      source: path_planning_node/path
+    LaserScan:
+      source: ms200/LaserScan
+    CorrectedPose:
+      source: karto_slam/CorrectedPose
+    GoalPose:
+      source: pose_goal/goal_pose
+    tick:
+      source: dora/timer/millis/100
+  outputs:
+  - CmdVelTwist
+  - LocalPlannerStatus
+  env:
+    CMD_OUTPUT_ID: CmdVelTwist
+    STATUS_OUTPUT_ID: LocalPlannerStatus
+    RESOLUTION: '0.05'
+    MAP_HEIGHT: '400'
+    ORIGIN_X: '-10.0'
+    ORIGIN_Y: '-10.0'
+    MAX_LINEAR_SPEED: '0.055'
+    MAX_LATERAL_SPEED: '0.055'
+    MAX_ANGULAR_SPEED: '0.23'
+    MAX_LINEAR_ACCEL: '0.12'
+    MAX_LATERAL_ACCEL: '0.12'
+    MAX_ANGULAR_ACCEL: '0.60'
+    CONTROL_DT: '0.10'
+    MIN_SPEED_XY: '0.005'
+    MIN_TRAJECTORY_PROGRESS: '0.002'
+    VX_SAMPLES: '7'
+    VY_SAMPLES: '7'
+    WZ_SAMPLES: '1'
+    SIM_TIME: '1.20'
+    SIM_DT: '0.20'
+    ROBOT_RADIUS: '0.15'
+    SAFETY_MARGIN: '0.03'
+    RPP_DESIRED_LINEAR_VEL: '0.05'
+    RPP_MIN_LOOKAHEAD_DIST: '0.20'
+    RPP_MAX_LOOKAHEAD_DIST: '0.45'
+    RPP_LOOKAHEAD_TIME: '1.5'
+    RPP_REGULATED_MIN_RADIUS: '0.40'
+    RPP_REGULATED_MIN_SPEED: '0.012'
+    RPP_APPROACH_SCALING_DIST: '0.35'
+    RPP_MIN_APPROACH_SPEED: '0.008'
+    RPP_MAX_ANGULAR_SPEED: '0.23'
+    RPP_COLLISION_HORIZON: '1.5'
+    RPP_COLLISION_DT: '0.05'
+    ROTATION_SHIM_ENTER_ANGLE: '0.75'
+    ROTATION_SHIM_EXIT_ANGLE: '0.35'
+    ROTATION_SHIM_ANGULAR_GAIN: '1.0'
+    ROTATION_SHIM_MIN_ANGULAR_SPEED: '0.05'
+    ROTATION_SHIM_MAX_ANGULAR_SPEED: '0.23'
+    FOOTPRINT_HALF_LENGTH: '0.17'
+    FOOTPRINT_HALF_WIDTH: '0.17'
+    SELF_FILTER_PADDING: '0.01'
+    STOP_CLEARANCE: '0.24'
+    GOAL_TOLERANCE: '0.05'
+    YAW_GOAL_TOLERANCE: '0.035'
+    PATH_WEIGHT: '2.4'
+    GOAL_WEIGHT: '1.6'
+    OBSTACLE_WEIGHT: '1.2'
+    HEADING_WEIGHT: '0.25'
+    GOAL_ANGLE_THRESHOLD: '0.50'
+    VELOCITY_WEIGHT: '0.15'
+    DEADBAND_WEIGHT: '35.0'
+    SMOOTH_WEIGHT: '0.15'
+    OBSTACLE_INFLUENCE_DISTANCE: '0.60'
+    DEADBAND_LINEAR: '0.005'
+    DEADBAND_ANGULAR: '0.02'
+    LOCAL_COSTMAP_RESOLUTION: '0.05'
+    LOCAL_COSTMAP_SIZE_X: '2.00'
+    LOCAL_COSTMAP_SIZE_Y: '2.00'
+    INFLATION_RADIUS: '0.18'
+    LETHAL_COST_RADIUS: '0.12'
+    SCAN_POINT_STRIDE: '2'
+    MAX_SCAN_RANGE: '4.0'
+    POSE_TIMEOUT_MS: '1000'
+    PATH_TIMEOUT_MS: '2500'
+    SCAN_TIMEOUT_MS: '500'
+    ALLOW_REVERSE: 'true'
+    ALLOW_STRAFE: 'true'
+    ENABLE_YAW: 'false'
+    STOP_ON_LOCALIZATION_LOST: 'true'
+    MAX_LOCALIZATION_LOST_COUNT: '12'
+- id: velocity_smoother
+  path: ../../planning/velocity_smoother_dora_node/build/velocity_smoother_dora_node
+  inputs:
+    CmdVelTwist:
+      source: local_planner/CmdVelTwist
+    tick:
+      source: dora/timer/millis/50
+  outputs:
+  - SmoothedCmdVelTwist
+  env:
+    SMOOTHING_FREQUENCY: '20.0'
+    MAX_VX: '0.055'
+    MAX_VY: '0.055'
+    MAX_WZ: '0.23'
+    MIN_VX: '-0.045'
+    MIN_VY: '-0.045'
+    MIN_WZ: '-0.20'
+    MAX_ACCEL_X: '0.12'
+    MAX_ACCEL_Y: '0.12'
+    MAX_ACCEL_WZ: '0.60'
+    MAX_DECEL_X: '-0.12'
+    MAX_DECEL_Y: '-0.12'
+    MAX_DECEL_WZ: '-0.60'
+    DEADBAND_VX: '0.005'
+    DEADBAND_VY: '0.005'
+    DEADBAND_WZ: '0.02'
+    VELOCITY_TIMEOUT_MS: '350'
+- id: nav_supervisor
+  path: ../../planning/nav_supervisor_dora_node/build/nav_supervisor_dora_node
+  inputs:
+    CorrectedPose:
+      source: karto_slam/CorrectedPose
+    LocalPlannerStatus:
+      source: local_planner/LocalPlannerStatus
+    GoalPose:
+      source: pose_goal/goal_pose
+    CmdVelTwist:
+      source: velocity_smoother/SmoothedCmdVelTwist
+    tick:
+      source: dora/timer/millis/200
+    SlamStatus:
+      source: karto_slam/SlamStatus
+    SafetyStop:
+      source: karto_slam/SafetyStop
+  outputs:
+  - NavigationStatus
+  - ReplanRequest
+  - SafeCmdVelTwist
+  env:
+    OUTPUT_ID: NavigationStatus
+    REPLAN_OUTPUT_ID: ReplanRequest
+    CMD_OUTPUT_ID: SafeCmdVelTwist
+    GOAL_X: '0.50'
+    GOAL_Y: '-0.30'
+    GOAL_TOLERANCE: '0.05'
+    YAW_GOAL_TOLERANCE: '0.035'
+    NAV_TIMEOUT_MS: '180000'
+    POSE_TIMEOUT_MS: '1000'
+    BLOCKED_TIMEOUT_MS: '5000'
+    PROGRESS_TIMEOUT_MS: '10000'
+    REQUIRED_MOVEMENT_RADIUS: '0.05'
+    REQUIRED_MOVEMENT_ANGLE: '0.10'
+    REPLAN_COOLDOWN_MS: '3000'
+    MAX_REPLAN_ATTEMPTS: '3'

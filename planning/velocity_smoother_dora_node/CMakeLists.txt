@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.16)
+project(velocity_smoother_dora_node LANGUAGES CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+add_library(nav2_velocity_smoother_port src/velocity_smoother.cpp)
+target_include_directories(nav2_velocity_smoother_port PUBLIC include)
+
+set(DORA_INCLUDE_DIR "$ENV{HOME}/dora-main/apis/c/node")
+set(DORA_LIB_PATH "$ENV{HOME}/dora-main/target/release/libdora_node_api_c.a")
+if(EXISTS "${DORA_INCLUDE_DIR}/node_api.h" AND EXISTS "${DORA_LIB_PATH}")
+  add_executable(velocity_smoother_dora_node src/velocity_smoother_dora_node.cpp)
+  target_include_directories(velocity_smoother_dora_node PRIVATE ${DORA_INCLUDE_DIR} include)
+  target_link_libraries(velocity_smoother_dora_node PRIVATE nav2_velocity_smoother_port ${DORA_LIB_PATH})
+endif()
+
+enable_testing()
+add_executable(velocity_smoother_test tests/velocity_smoother_test.cpp)
+target_link_libraries(velocity_smoother_test PRIVATE nav2_velocity_smoother_port)
+add_test(NAME velocity_smoother COMMAND velocity_smoother_test)

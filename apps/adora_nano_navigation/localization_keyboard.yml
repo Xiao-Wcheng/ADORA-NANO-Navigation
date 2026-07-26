@@ -1,0 +1,119 @@
+_unstable_debug:
+  enable_debug_inspection: true
+nodes:
+- id: initial_pose_control
+  path: ../../localization/initial_pose_dora_node/build/initial_pose_dora_node
+  inputs:
+    tick:
+      source: dora/timer/millis/100
+  outputs:
+  - InitialPose
+  env:
+    INITIAL_POSE_FIFO: /tmp/dora_initial_pose_fifo
+    INITIAL_POSE_X: '0.0'
+    INITIAL_POSE_Y: '0.0'
+    INITIAL_POSE_YAW: '0.0'
+- id: keyboard_control
+  path: ../../chassis/feetech_kiwi_chassis_dora_node/build/keyboard_control_dora_node
+  inputs:
+    tick:
+      source: dora/timer/millis/100
+  outputs:
+  - CmdVelTwist
+  env:
+    KEY_LINEAR_SPEED: '0.04'
+    KEY_ANGULAR_SPEED: '0.10'
+    KEY_COMMAND_TIMEOUT: '0.50'
+    KEYBOARD_FIFO: /tmp/feetech_kiwi_keyboard_fifo
+- id: ms200
+  path: ../../driver/ms200_dora_node/build/ms200_dora_node
+  inputs:
+    tick:
+      source: dora/timer/millis/100
+  outputs:
+  - LaserScan
+  env:
+    SERIAL_PORT: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5AA6084348-if00
+    SERIAL_BAUD: '230400'
+    FRAME_ID: lidar
+    OUTPUT_ID: LaserScan
+    ANGLE_MIN_DEG: '0.0'
+    ANGLE_MAX_DEG: '360.0'
+    RANGE_MIN: '0.10'
+    RANGE_MAX: '12.0'
+    CLOCKWISE: 'false'
+    MOTOR_SPEED_HZ: '10'
+    TARGET_POINT_COUNT: '450'
+    CONNECT_RETRY_MS: '1000'
+    GRAB_TIMEOUT_MS: '500'
+- id: chassis
+  path: ../../chassis/feetech_kiwi_chassis_dora_node/sdk_node/target/release/feetech-kiwi-chassis-sdk-node
+  inputs:
+    tick:
+      source: dora/timer/millis/50
+    CmdVelTwist:
+      source: keyboard_control/CmdVelTwist
+  outputs:
+  - Odometry
+  env:
+    SERIAL_PORT: /dev/serial/by-id/usb-1a86_USB_Single_Serial_5AE6086267-if00
+    SERIAL_BAUD: '1000000'
+    WHEEL_IDS: 13,14,15
+    WHEEL_ANGLES_DEG: 60,180,300
+    LINEAR_TICKS_PER_MPS: '13350'
+    ANGULAR_TICKS_PER_RADPS: '1545'
+    SPEED_LIMIT: '1500'
+    ODOM_SOURCE: feedback
+    CMD_VEL_TIMEOUT_SEC: '0.35'
+- id: karto_slam
+  path: ../../localization/karto_slam_dora_node/build/karto_slam_dora_node
+  inputs:
+    LaserScan:
+      source: ms200/LaserScan
+    Odometry:
+      source: chassis/Odometry
+    InitialPose:
+      source: initial_pose_control/InitialPose
+  outputs:
+  - CorrectedPose
+  - SlamStatus
+  - SafetyStop
+  env:
+    SLAM_MODE: localization
+    MAP_PREFIX: ../../mapping/maps/ms200_keyboard_map
+    POSE_LOG_PATH: out/localization_quality.jsonl
+    MINIMUM_TRAVEL_DISTANCE: '0.05'
+    MINIMUM_TRAVEL_HEADING: '0.05'
+    SCAN_BUFFER_SIZE: '10'
+    SCAN_BUFFER_MAXIMUM_SCAN_DISTANCE: '10.0'
+    CORRELATION_SEARCH_SPACE_DIMENSION: '0.5'
+    CORRELATION_SEARCH_SPACE_RESOLUTION: '0.01'
+    LOOP_SEARCH_MAXIMUM_DISTANCE: '3.0'
+    MAX_LASER_RANGE: '8.0'
+    MAX_SYNC_WAIT: '0.20'
+    ODOM_BUFFER_DURATION: '3.0'
+    MAP_RESOLUTION: '0.05'
+    MAP_CROP_MARGIN: '0.50'
+    LIDAR_X: '0.09'
+    LIDAR_Y: '0.06'
+    LIDAR_YAW: '0.0'
+- id: pose_monitor
+  path: ../../planning/pose_goal_dora_node/build/pose_goal_dora_node
+  inputs:
+    CorrectedPose:
+      source: karto_slam/CorrectedPose
+    tick:
+      source: dora/timer/millis/1000
+  outputs:
+  - goal_pose
+  env:
+    GOAL_X: '0.0'
+    GOAL_Y: '0.0'
+    GOAL_THETA: '0.0'
+    SEND_ONCE: 'false'
+    REQUIRE_LOCALIZATION_MATCH: 'true'
+    MAP_WIDTH: '89'
+    MAP_HEIGHT: '85'
+    ORIGIN_X: '-0.8'
+    ORIGIN_Y: '-3.1'
+    RESOLUTION: '0.05'
